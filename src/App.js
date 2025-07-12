@@ -181,11 +181,11 @@ const EventList = ({ onEditEvent, onAddScore, onShowScores }) => {
           await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_scores`, scoreDoc.id));
         });
         setModalMessage("Event and its scores deleted successfully!");
-        setModalAction(null);
-        setCurrentModalEventId(null);
       } catch (e) {
         console.error("Error deleting event:", e);
         setModalMessage("Error deleting event: " + e.message);
+      } finally {
+        // Clear modal state after action, regardless of success/failure
         setModalAction(null);
         setCurrentModalEventId(null);
       }
@@ -198,11 +198,12 @@ const EventList = ({ onEditEvent, onAddScore, onShowScores }) => {
     setCurrentModalEventId(null);
   };
 
-  const confirmModal = () => {
+  // FIX: Await the modalAction to ensure it completes before clearing state
+  const confirmModal = async () => {
     if (modalAction) {
-      modalAction();
+      await modalAction(); // AWAIT the asynchronous action
     }
-    closeModal();
+    closeModal(); // Then close the modal
   };
 
   return (
@@ -294,11 +295,11 @@ const ParticipantList = ({ onEditParticipant }) => {
           await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_scores`, scoreDoc.id));
         });
         setModalMessage("Participant and their scores deleted successfully!");
-        setModalAction(null);
-        setCurrentModalParticipantId(null);
       } catch (e) {
         console.error("Error deleting participant:", e);
         setModalMessage("Error deleting participant: " + e.message);
+      } finally {
+        // Clear modal state after action, regardless of success/failure
         setModalAction(null);
         setCurrentModalParticipantId(null);
       }
@@ -311,11 +312,12 @@ const ParticipantList = ({ onEditParticipant }) => {
     setCurrentModalParticipantId(null);
   };
 
-  const confirmModal = () => {
+  // FIX: Await the modalAction to ensure it completes before clearing state
+  const confirmModal = async () => {
     if (modalAction) {
-      modalAction();
+      await modalAction(); // AWAIT the asynchronous action
     }
-    closeModal();
+    closeModal(); // Then close the modal
   };
 
   return (
@@ -413,7 +415,7 @@ const EventForm = ({ eventToEdit, onSave, onCancel }) => {
     setError('');
     try {
       const prompt = "Suggest a creative sports day event name and its type (e.g., 'Track', 'Field', 'Team'). Provide the response as a JSON object with 'eventName' and 'eventType' keys.";
-      const chatHistory = [];
+      let chatHistory = [];
       chatHistory.push({ role: "user", parts: [{ text: prompt }] });
       const payload = {
         contents: chatHistory,
