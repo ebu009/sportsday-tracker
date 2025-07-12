@@ -48,10 +48,28 @@ function AuthWrapper({ children }) {
   useEffect(() => {
     const initializeFirebase = async () => {
       try {
-        // Retrieve Firebase config and auth token from global variables
-        // __app_id is used directly in collection paths later
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // --- Firebase Config for Deployed App ---
+        // Read from Netlify Environment Variables (prefixed with REACT_APP_)
+        const firebaseConfig = {
+          apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+          authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+          projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+          storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+          messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+          appId: process.env.REACT_APP_FIREBASE_APP_ID,
+          measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID // Optional
+        };
+
+        // Fallback for local development or Canvas environment
+        // This ensures it works both here and on Netlify
+        if (typeof __firebase_config !== 'undefined' && Object.keys(firebaseConfig).every(key => !firebaseConfig[key])) {
+            Object.assign(firebaseConfig, JSON.parse(__firebase_config));
+        }
+
+        // Check if essential config is missing after trying both sources
+        if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+            throw new Error("Firebase configuration is missing. Please set environment variables in Netlify.");
+        }
 
         // Initialize Firebase app
         const app = initializeApp(firebaseConfig);
@@ -61,11 +79,12 @@ function AuthWrapper({ children }) {
         setDb(firestoreDb);
         setAuth(firebaseAuth);
 
-        // Sign in with custom token or anonymously
+        // Sign in with custom token (from Canvas) or anonymously (for deployed app)
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         if (initialAuthToken) {
           await signInWithCustomToken(firebaseAuth, initialAuthToken);
         } else {
-          await signInAnonymously(firebaseAuth);
+          await signInAnonymously(firebaseAuth); // Default for deployed app
         }
 
         // Listen for auth state changes
@@ -85,7 +104,7 @@ function AuthWrapper({ children }) {
         return () => unsubscribe(); // Cleanup auth listener
       } catch (e) {
         console.error("Failed to initialize Firebase:", e);
-        setError("Failed to initialize the application. Please try again later.");
+        setError("Failed to initialize the application: " + e.message + ". Please ensure Firebase config is correct in Netlify.");
         setLoading(false);
       }
     };
@@ -123,16 +142,14 @@ const EventList = ({ onEditEvent, onAddScore, onShowScores }) => {
   const [events, setEvents] = useState([]);
   const [modalMessage, setModalMessage] = useState('');
   const [modalAction, setModalAction] = useState(null);
-  // selectedEventId is not directly used in render, but needed for modal context
-  const [currentModalEventId, setCurrentModalEventId] = useState(null);
+  const [currentModalEventId, setCurrentModalEventId] = useState(null); // Used for modal context
 
   useEffect(() => {
     if (db && isAuthReady) {
-      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
       const eventsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_events`);
       const unsubscribe = onSnapshot(eventsColRef, (snapshot) => {
         const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // Sort events by name
         eventsData.sort((a, b) => a.name.localeCompare(b.name));
         setEvents(eventsData);
       }, (error) => {
@@ -147,17 +164,16 @@ const EventList = ({ onEditEvent, onAddScore, onShowScores }) => {
     setCurrentModalEventId(eventId); // Set the ID for the modal's context
     setModalAction(() => async () => {
       try {
-        const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_events`, currentModalEventId)); // Use the state variable
-        // Also delete associated scores
-        const scoresQuery = query(collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`), where("eventId", "==", currentModalEventId)); // Use the state variable
+        const currentAppId = typeof __app_id !== 'undefined' ? __app_id : process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
+        await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_events`, currentModalEventId));
+        const scoresQuery = query(collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`), where("eventId", "==", currentModalEventId));
         const scoresSnapshot = await getDocs(scoresQuery);
         scoresSnapshot.forEach(async (scoreDoc) => {
           await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_scores`, scoreDoc.id));
         });
         setModalMessage("Event and its scores deleted successfully!");
         setModalAction(null);
-        setCurrentModalEventId(null); // Clear after action
+        setCurrentModalEventId(null);
       } catch (e) {
         console.error("Error deleting event:", e);
         setModalMessage("Error deleting event: " + e.message);
@@ -187,7 +203,7 @@ const EventList = ({ onEditEvent, onAddScore, onShowScores }) => {
         message={modalMessage}
         onConfirm={confirmModal}
         onCancel={closeModal}
-        showCancel={modalAction !== null} // Only show cancel if there's an action pending
+        showCancel={modalAction !== null}
       />
       {events.length === 0 ? (
         <p className="text-gray-600 italic">No events added yet. Add one to get started!</p>
@@ -239,16 +255,14 @@ const ParticipantList = ({ onEditParticipant }) => {
   const [participants, setParticipants] = useState([]);
   const [modalMessage, setModalMessage] = useState('');
   const [modalAction, setModalAction] = useState(null);
-  // selectedParticipantId is not directly used in render, but needed for modal context
-  const [currentModalParticipantId, setCurrentModalParticipantId] = useState(null);
+  const [currentModalParticipantId, setCurrentModalParticipantId] = useState(null); // Used for modal context
 
   useEffect(() => {
     if (db && isAuthReady) {
-      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
       const participantsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_participants`);
       const unsubscribe = onSnapshot(participantsColRef, (snapshot) => {
         const participantsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // Sort participants by name
         participantsData.sort((a, b) => a.name.localeCompare(b.name));
         setParticipants(participantsData);
       }, (error) => {
@@ -263,17 +277,16 @@ const ParticipantList = ({ onEditParticipant }) => {
     setCurrentModalParticipantId(participantId); // Set the ID for the modal's context
     setModalAction(() => async () => {
       try {
-        const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_participants`, currentModalParticipantId)); // Use the state variable
-        // Also delete associated scores
-        const scoresQuery = query(collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`), where("participantId", "==", currentModalParticipantId)); // Use the state variable
+        const currentAppId = typeof __app_id !== 'undefined' ? __app_id : process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
+        await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_participants`, currentModalParticipantId));
+        const scoresQuery = query(collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`), where("participantId", "==", currentModalParticipantId));
         const scoresSnapshot = await getDocs(scoresQuery);
         scoresSnapshot.forEach(async (scoreDoc) => {
           await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_scores`, scoreDoc.id));
         });
         setModalMessage("Participant and their scores deleted successfully!");
         setModalAction(null);
-        setCurrentModalParticipantId(null); // Clear after action
+        setCurrentModalParticipantId(null);
       } catch (e) {
         console.error("Error deleting participant:", e);
         setModalMessage("Error deleting participant: " + e.message);
@@ -369,7 +382,7 @@ const EventForm = ({ eventToEdit, onSave, onCancel }) => {
     }
 
     const eventData = { name: name.trim(), type: type.trim() };
-    const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const currentAppId = typeof __app_id !== 'undefined' ? __app_id : process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
 
     try {
       if (eventToEdit) {
@@ -531,7 +544,7 @@ const ParticipantForm = ({ participantToEdit, onSave, onCancel }) => {
     }
 
     const participantData = { name: name.trim(), house: house.trim() };
-    const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const currentAppId = typeof __app_id !== 'undefined' ? __app_id : process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
 
     try {
       if (participantToEdit) {
@@ -607,7 +620,7 @@ const ScoreEntry = ({ eventId, eventName, onSave, onCancel }) => {
 
   useEffect(() => {
     if (db && isAuthReady) {
-      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
       const participantsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_participants`);
       const scoresColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`);
 
@@ -662,7 +675,7 @@ const ScoreEntry = ({ eventId, eventName, onSave, onCancel }) => {
       return;
     }
 
-    const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const currentAppId = typeof __app_id !== 'undefined' ? __app_id : process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
     const scoresColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`);
 
     try {
@@ -712,7 +725,7 @@ const ScoreEntry = ({ eventId, eventName, onSave, onCancel }) => {
         </button>
       </div>
     );
-  }
+  };
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
@@ -764,18 +777,18 @@ const EventScoresView = ({ eventId, eventName, onBack }) => {
 
   useEffect(() => {
     if (db && isAuthReady) {
-      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
       const scoresColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`);
       const participantsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_participants`);
 
       // Fetch participants once to create a map
       const fetchParticipants = async () => {
         const snapshot = await getDocs(participantsColRef);
-        const map = {};
+        const newParticipantsMap = {};
         snapshot.docs.forEach(doc => {
-          map[doc.id] = doc.data();
+          newParticipantsMap[doc.id] = doc.data();
         });
-        setParticipantsMap(map);
+        setParticipantsMap(newParticipantsMap);
       };
 
       fetchParticipants();
@@ -784,7 +797,6 @@ const EventScoresView = ({ eventId, eventName, onBack }) => {
       const q = query(scoresColRef, where("eventId", "==", eventId));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const scoresData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // Sort scores (e.g., by score value, highest first)
         scoresData.sort((a, b) => b.score - a.score);
         setEventScores(scoresData);
         setLoading(false);
@@ -844,7 +856,7 @@ const OverallStandings = () => {
 
   useEffect(() => {
     if (db && isAuthReady) {
-      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
       const scoresColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`);
       const participantsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_participants`);
 
@@ -853,7 +865,7 @@ const OverallStandings = () => {
 
         // Fetch all participants
         const participantsSnapshot = await getDocs(participantsColRef);
-        const participantsMap = {};
+        const participantsMap = {}; // Correctly define participantsMap here
         participantsSnapshot.docs.forEach(doc => {
           participantsMap[doc.id] = doc.data();
         });
@@ -942,7 +954,7 @@ const Stopwatch = ({ onBack }) => {
   // Fetch events and participants for score saving
   useEffect(() => {
     if (db && isAuthReady) {
-      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
       const eventsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_events`);
       const participantsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_participants`);
 
@@ -1031,7 +1043,7 @@ const Stopwatch = ({ onBack }) => {
       return;
     }
 
-    const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const currentAppId = typeof __app_id !== 'undefined' ? __app_id : process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
     const scoresColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`);
 
     try {
@@ -1190,7 +1202,7 @@ const Dashboard = ({ onViewChange, currentView, eventToEdit, participantToEdit, 
   // Check if there are any events or participants
   useEffect(() => {
     if (db && isAuthReady) {
-      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : process.env.REACT_APP_FIREBASE_APP_ID || 'default-app-id';
       const eventsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_events`);
       const participantsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_participants`);
 
