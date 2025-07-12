@@ -855,7 +855,7 @@ const OverallStandings = () => {
         const participantsSnapshot = await getDocs(participantsColRef);
         const participantsMap = {};
         participantsSnapshot.docs.forEach(doc => {
-          map[doc.id] = doc.data();
+          participantsMap[doc.id] = doc.data();
         });
 
         // Calculate total scores for each participant
