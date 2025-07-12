@@ -48,8 +48,8 @@ function AuthWrapper({ children }) {
   useEffect(() => {
     const initializeFirebase = async () => {
       try {
-        // Retrieve app ID and Firebase config from global variables
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Retrieve Firebase config and auth token from global variables
+        // __app_id is used directly in collection paths later
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
@@ -123,12 +123,13 @@ const EventList = ({ onEditEvent, onAddScore, onShowScores }) => {
   const [events, setEvents] = useState([]);
   const [modalMessage, setModalMessage] = useState('');
   const [modalAction, setModalAction] = useState(null);
-  const [selectedEventId, setSelectedEventId] = useState(null);
+  // selectedEventId is not directly used in render, but needed for modal context
+  const [currentModalEventId, setCurrentModalEventId] = useState(null);
 
   useEffect(() => {
     if (db && isAuthReady) {
-      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-      const eventsColRef = collection(db, `artifacts/${appId}/public/data/sportsday_events`);
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const eventsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_events`);
       const unsubscribe = onSnapshot(eventsColRef, (snapshot) => {
         const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         // Sort events by name
@@ -143,31 +144,33 @@ const EventList = ({ onEditEvent, onAddScore, onShowScores }) => {
 
   const handleDeleteEvent = (eventId) => {
     setModalMessage("Are you sure you want to delete this event? This action cannot be undone.");
+    setCurrentModalEventId(eventId); // Set the ID for the modal's context
     setModalAction(() => async () => {
       try {
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        await deleteDoc(doc(db, `artifacts/${appId}/public/data/sportsday_events`, eventId));
+        const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_events`, currentModalEventId)); // Use the state variable
         // Also delete associated scores
-        const scoresQuery = query(collection(db, `artifacts/${appId}/public/data/sportsday_scores`), where("eventId", "==", eventId));
+        const scoresQuery = query(collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`), where("eventId", "==", currentModalEventId)); // Use the state variable
         const scoresSnapshot = await getDocs(scoresQuery);
         scoresSnapshot.forEach(async (scoreDoc) => {
-          await deleteDoc(doc(db, `artifacts/${appId}/public/data/sportsday_scores`, scoreDoc.id));
+          await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_scores`, scoreDoc.id));
         });
         setModalMessage("Event and its scores deleted successfully!");
         setModalAction(null);
+        setCurrentModalEventId(null); // Clear after action
       } catch (e) {
         console.error("Error deleting event:", e);
         setModalMessage("Error deleting event: " + e.message);
         setModalAction(null);
+        setCurrentModalEventId(null);
       }
     });
-    setSelectedEventId(eventId);
   };
 
   const closeModal = () => {
     setModalMessage('');
     setModalAction(null);
-    setSelectedEventId(null);
+    setCurrentModalEventId(null);
   };
 
   const confirmModal = () => {
@@ -236,12 +239,13 @@ const ParticipantList = ({ onEditParticipant }) => {
   const [participants, setParticipants] = useState([]);
   const [modalMessage, setModalMessage] = useState('');
   const [modalAction, setModalAction] = useState(null);
-  const [selectedParticipantId, setSelectedParticipantId] = useState(null);
+  // selectedParticipantId is not directly used in render, but needed for modal context
+  const [currentModalParticipantId, setCurrentModalParticipantId] = useState(null);
 
   useEffect(() => {
     if (db && isAuthReady) {
-      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-      const participantsColRef = collection(db, `artifacts/${appId}/public/data/sportsday_participants`);
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const participantsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_participants`);
       const unsubscribe = onSnapshot(participantsColRef, (snapshot) => {
         const participantsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         // Sort participants by name
@@ -256,31 +260,33 @@ const ParticipantList = ({ onEditParticipant }) => {
 
   const handleDeleteParticipant = (participantId) => {
     setModalMessage("Are you sure you want to delete this participant? This will also delete all their scores.");
+    setCurrentModalParticipantId(participantId); // Set the ID for the modal's context
     setModalAction(() => async () => {
       try {
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        await deleteDoc(doc(db, `artifacts/${appId}/public/data/sportsday_participants`, participantId));
+        const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_participants`, currentModalParticipantId)); // Use the state variable
         // Also delete associated scores
-        const scoresQuery = query(collection(db, `artifacts/${appId}/public/data/sportsday_scores`), where("participantId", "==", participantId));
+        const scoresQuery = query(collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`), where("participantId", "==", currentModalParticipantId)); // Use the state variable
         const scoresSnapshot = await getDocs(scoresQuery);
         scoresSnapshot.forEach(async (scoreDoc) => {
-          await deleteDoc(doc(db, `artifacts/${appId}/public/data/sportsday_scores`, scoreDoc.id));
+          await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_scores`, scoreDoc.id));
         });
         setModalMessage("Participant and their scores deleted successfully!");
         setModalAction(null);
+        setCurrentModalParticipantId(null); // Clear after action
       } catch (e) {
         console.error("Error deleting participant:", e);
         setModalMessage("Error deleting participant: " + e.message);
         setModalAction(null);
+        setCurrentModalParticipantId(null);
       }
     });
-    setSelectedParticipantId(participantId);
   };
 
   const closeModal = () => {
     setModalMessage('');
     setModalAction(null);
-    setSelectedParticipantId(null);
+    setCurrentModalParticipantId(null);
   };
 
   const confirmModal = () => {
@@ -337,6 +343,7 @@ const EventForm = ({ eventToEdit, onSave, onCancel }) => {
   const [name, setName] = useState(eventToEdit ? eventToEdit.name : '');
   const [type, setType] = useState(eventToEdit ? eventToEdit.type : '');
   const [error, setError] = useState('');
+  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
 
   useEffect(() => {
     if (eventToEdit) {
@@ -362,20 +369,70 @@ const EventForm = ({ eventToEdit, onSave, onCancel }) => {
     }
 
     const eventData = { name: name.trim(), type: type.trim() };
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
     try {
       if (eventToEdit) {
         // Update existing event
-        await updateDoc(doc(db, `artifacts/${appId}/public/data/sportsday_events`, eventToEdit.id), eventData);
+        await updateDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_events`, eventToEdit.id), eventData);
       } else {
         // Add new event
-        await addDoc(collection(db, `artifacts/${appId}/public/data/sportsday_events`), eventData);
+        await addDoc(collection(db, `artifacts/${currentAppId}/public/data/sportsday_events`), eventData);
       }
       onSave(); // Go back to dashboard
     } catch (e) {
       console.error("Error saving event:", e);
       setError("Failed to save event: " + e.message);
+    }
+  };
+
+  const handleSuggestEvent = async () => {
+    setLoadingSuggestion(true);
+    setError('');
+    try {
+      const prompt = "Suggest a creative sports day event name and its type (e.g., 'Track', 'Field', 'Team'). Provide the response as a JSON object with 'eventName' and 'eventType' keys.";
+      const chatHistory = [];
+      chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+      const payload = {
+        contents: chatHistory,
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              "eventName": { "type": "STRING" },
+              "eventType": { "type": "STRING" }
+            },
+            "propertyOrdering": ["eventName", "eventType"]
+          }
+        }
+      };
+      const apiKey = ""; // Canvas will automatically provide this
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+
+      if (result.candidates && result.candidates.length > 0 &&
+          result.candidates[0].content && result.candidates[0].content.parts &&
+          result.candidates[0].content.parts.length > 0) {
+        const json = result.candidates[0].content.parts[0].text;
+        const parsedJson = JSON.parse(json);
+        setName(parsedJson.eventName || '');
+        setType(parsedJson.eventType || '');
+      } else {
+        setError("Failed to get event suggestion. Please try again.");
+      }
+    } catch (e) {
+      console.error("Error suggesting event:", e);
+      setError("Error suggesting event: " + e.message);
+    } finally {
+      setLoadingSuggestion(false);
     }
   };
 
@@ -408,7 +465,7 @@ const EventForm = ({ eventToEdit, onSave, onCancel }) => {
           />
         </div>
         {error && <p className="text-red-600 text-sm">{error}</p>}
-        <div className="flex space-x-4">
+        <div className="flex flex-wrap gap-4 mt-6">
           <button
             type="submit"
             className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-200"
@@ -421,6 +478,21 @@ const EventForm = ({ eventToEdit, onSave, onCancel }) => {
             className="px-6 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 transition duration-200"
           >
             Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSuggestEvent}
+            className="flex items-center px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition duration-200"
+            disabled={loadingSuggestion}
+          >
+            {loadingSuggestion ? (
+              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              '✨ Suggest Event Idea'
+            )}
           </button>
         </div>
       </form>
@@ -459,15 +531,15 @@ const ParticipantForm = ({ participantToEdit, onSave, onCancel }) => {
     }
 
     const participantData = { name: name.trim(), house: house.trim() };
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
     try {
       if (participantToEdit) {
         // Update existing participant
-        await updateDoc(doc(db, `artifacts/${appId}/public/data/sportsday_participants`, participantToEdit.id), participantData);
+        await updateDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_participants`, participantToEdit.id), participantData);
       } else {
         // Add new participant
-        await addDoc(collection(db, `artifacts/${appId}/public/data/sportsday_participants`), participantData);
+        await addDoc(collection(db, `artifacts/${currentAppId}/public/data/sportsday_participants`), participantData);
       }
       onSave(); // Go back to dashboard
     } catch (e) {
@@ -535,9 +607,9 @@ const ScoreEntry = ({ eventId, eventName, onSave, onCancel }) => {
 
   useEffect(() => {
     if (db && isAuthReady) {
-      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-      const participantsColRef = collection(db, `artifacts/${appId}/public/data/sportsday_participants`);
-      const scoresColRef = collection(db, `artifacts/${appId}/public/data/sportsday_scores`);
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const participantsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_participants`);
+      const scoresColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`);
 
       // Fetch participants
       const unsubscribeParticipants = onSnapshot(participantsColRef, (snapshot) => {
@@ -590,8 +662,8 @@ const ScoreEntry = ({ eventId, eventName, onSave, onCancel }) => {
       return;
     }
 
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const scoresColRef = collection(db, `artifacts/${appId}/public/data/sportsday_scores`);
+    const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const scoresColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`);
 
     try {
       for (const participant of participants) {
@@ -606,14 +678,14 @@ const ScoreEntry = ({ eventId, eventName, onSave, onCancel }) => {
 
           if (existingScores[participant.id]) {
             // Update existing score
-            await updateDoc(doc(db, `artifacts/${appId}/public/data/sportsday_scores`, existingScores[participant.id]), scoreData);
+            await updateDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_scores`, existingScores[participant.id]), scoreData);
           } else {
             // Add new score
             await addDoc(scoresColRef, scoreData);
           }
         } else if (existingScores[participant.id]) {
           // If score is cleared and an existing score exists, delete it
-          await deleteDoc(doc(db, `artifacts/${appId}/public/data/sportsday_scores`, existingScores[participant.id]));
+          await deleteDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_scores`, existingScores[participant.id]));
         }
       }
       onSave(); // Go back to dashboard
@@ -692,9 +764,9 @@ const EventScoresView = ({ eventId, eventName, onBack }) => {
 
   useEffect(() => {
     if (db && isAuthReady) {
-      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-      const scoresColRef = collection(db, `artifacts/${appId}/public/data/sportsday_scores`);
-      const participantsColRef = collection(db, `artifacts/${appId}/public/data/sportsday_participants`);
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const scoresColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`);
+      const participantsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_participants`);
 
       // Fetch participants once to create a map
       const fetchParticipants = async () => {
@@ -772,9 +844,9 @@ const OverallStandings = () => {
 
   useEffect(() => {
     if (db && isAuthReady) {
-      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-      const scoresColRef = collection(db, `artifacts/${appId}/public/data/sportsday_scores`);
-      const participantsColRef = collection(db, `artifacts/${appId}/public/data/sportsday_participants`);
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const scoresColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`);
+      const participantsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_participants`);
 
       const unsubscribe = onSnapshot(scoresColRef, async (scoresSnapshot) => {
         const allScores = scoresSnapshot.docs.map(doc => doc.data());
@@ -783,7 +855,7 @@ const OverallStandings = () => {
         const participantsSnapshot = await getDocs(participantsColRef);
         const participantsMap = {};
         participantsSnapshot.docs.forEach(doc => {
-          participantsMap[doc.id] = doc.data();
+          map[doc.id] = doc.data();
         });
 
         // Calculate total scores for each participant
@@ -823,7 +895,7 @@ const OverallStandings = () => {
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-lg">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-3">Overall Standings</h2>
+      <h2 className="2xl font-bold text-gray-800 mb-6 border-b pb-3">Overall Standings</h2>
       {standings.length === 0 ? (
         <p className="text-gray-600 italic">No scores recorded yet to calculate standings.</p>
       ) : (
@@ -870,9 +942,9 @@ const Stopwatch = ({ onBack }) => {
   // Fetch events and participants for score saving
   useEffect(() => {
     if (db && isAuthReady) {
-      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-      const eventsColRef = collection(db, `artifacts/${appId}/public/data/sportsday_events`);
-      const participantsColRef = collection(db, `artifacts/${appId}/public/data/sportsday_participants`);
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const eventsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_events`);
+      const participantsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_participants`);
 
       const unsubscribeEvents = onSnapshot(eventsColRef, (snapshot) => {
         const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -959,8 +1031,8 @@ const Stopwatch = ({ onBack }) => {
       return;
     }
 
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const scoresColRef = collection(db, `artifacts/${appId}/public/data/sportsday_scores`);
+    const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const scoresColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_scores`);
 
     try {
       // Convert milliseconds to seconds for score storage
@@ -979,7 +1051,7 @@ const Stopwatch = ({ onBack }) => {
 
       if (existingScores.docs.length > 0) {
         // Update existing score
-        await updateDoc(doc(db, `artifacts/${appId}/public/data/sportsday_scores`, existingScores.docs[0].id), scoreData);
+        await updateDoc(doc(db, `artifacts/${currentAppId}/public/data/sportsday_scores`, existingScores.docs[0].id), scoreData);
         setSaveMessage("Score updated successfully!");
       } else {
         // Add new score
@@ -1110,9 +1182,82 @@ const Stopwatch = ({ onBack }) => {
 
 // --- Main Dashboard Component ---
 const Dashboard = ({ onViewChange, currentView, eventToEdit, participantToEdit, eventForScoreEntry, eventForScoresView }) => {
-  const { userId } = useContext(AppContext);
+  const { userId, db, isAuthReady } = useContext(AppContext);
+  const [hasEvents, setHasEvents] = useState(false);
+  const [hasParticipants, setHasParticipants] = useState(false);
+  const [loadingInitialData, setLoadingInitialData] = useState(true);
+
+  // Check if there are any events or participants
+  useEffect(() => {
+    if (db && isAuthReady) {
+      const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const eventsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_events`);
+      const participantsColRef = collection(db, `artifacts/${currentAppId}/public/data/sportsday_participants`);
+
+      const checkData = async () => {
+        const eventsSnapshot = await getDocs(eventsColRef);
+        setHasEvents(!eventsSnapshot.empty);
+
+        const participantsSnapshot = await getDocs(participantsColRef);
+        setHasParticipants(!participantsSnapshot.empty);
+        setLoadingInitialData(false);
+      };
+      checkData();
+
+      // Also listen for real-time changes to update the flags
+      const unsubscribeEvents = onSnapshot(eventsColRef, (snapshot) => {
+        setHasEvents(!snapshot.empty);
+      });
+      const unsubscribeParticipants = onSnapshot(participantsColRef, (snapshot) => {
+        setHasParticipants(!snapshot.empty);
+      });
+
+      return () => {
+        unsubscribeEvents();
+        unsubscribeParticipants();
+      };
+    }
+  }, [db, isAuthReady]);
+
 
   const renderContent = () => {
+    if (loadingInitialData) {
+      return <div className="text-center py-8 text-gray-600">Checking initial data...</div>;
+    }
+
+    // Guided setup if no events or participants
+    if (!hasEvents && currentView === 'dashboard') {
+      return (
+        <div className="bg-white p-6 rounded-xl shadow-lg text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Welcome! Let's Get Started</h2>
+          <p className="text-gray-600 mb-6">It looks like you don't have any events yet. Start by adding your first event!</p>
+          <button
+            onClick={() => onViewChange('add-event')}
+            className="flex items-center justify-center mx-auto px-6 py-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transform hover:-translate-y-1 transition duration-300 font-semibold text-lg"
+          >
+            <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Add Your First Event
+          </button>
+        </div>
+      );
+    }
+
+    if (hasEvents && !hasParticipants && currentView === 'dashboard') {
+      return (
+        <div className="bg-white p-6 rounded-xl shadow-lg text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Great! Now Add Participants</h2>
+          <p className="text-gray-600 mb-6">You've added events! Now let's add some participants to track their scores.</p>
+          <button
+            onClick={() => onViewChange('add-participant')}
+            className="flex items-center justify-center mx-auto px-6 py-3 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 transform hover:-translate-y-1 transition duration-300 font-semibold text-lg"
+          >
+            <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+            Add Your First Participant
+          </button>
+        </div>
+      );
+    }
+
     switch (currentView) {
       case 'add-event':
         return <EventForm onSave={() => onViewChange('dashboard')} onCancel={() => onViewChange('dashboard')} />;
@@ -1161,7 +1306,7 @@ const Dashboard = ({ onViewChange, currentView, eventToEdit, participantToEdit, 
       </header>
 
       <div className="max-w-4xl mx-auto">
-        {currentView === 'dashboard' && (
+        {currentView === 'dashboard' && hasEvents && hasParticipants && (
           <div className="flex flex-wrap justify-center gap-4 mb-8">
             <button
               onClick={() => onViewChange('add-event')}
