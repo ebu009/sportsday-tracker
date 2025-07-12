@@ -66,6 +66,15 @@ function AuthWrapper({ children }) {
             Object.assign(firebaseConfig, JSON.parse(__firebase_config));
         }
 
+        // --- DEBUGGING LOGS START ---
+        console.log("Attempting Firebase Initialization...");
+        console.log("firebaseConfig object:", firebaseConfig);
+        console.log("REACT_APP_FIREBASE_API_KEY:", process.env.REACT_APP_FIREBASE_API_KEY);
+        console.log("REACT_APP_FIREBASE_PROJECT_ID:", process.env.REACT_APP_FIREBASE_PROJECT_ID);
+        console.log("REACT_APP_FIREBASE_APP_ID:", process.env.REACT_APP_FIREBASE_APP_ID);
+        // --- DEBUGGING LOGS END ---
+
+
         // Check if essential config is missing after trying both sources
         if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
             throw new Error("Firebase configuration is missing. Please set environment variables in Netlify.");
@@ -865,7 +874,7 @@ const OverallStandings = () => {
 
         // Fetch all participants
         const participantsSnapshot = await getDocs(participantsColRef);
-        const participantsMap = {}; // Correctly define participantsMap here
+        const participantsMap = {};
         participantsSnapshot.docs.forEach(doc => {
           participantsMap[doc.id] = doc.data();
         });
